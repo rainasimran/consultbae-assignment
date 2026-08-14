@@ -1,0 +1,149 @@
+{
+  "name": "ConsultBae - New Applicant Duplicate Check",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-applicant",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Webhook - New Applicant",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-40, 260],
+      "webhookId": "consultbae-new-applicant"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same normalization used by scripts/ingest.py, kept in sync manually.\nconst body = $input.item.json.body || $input.item.json;\nconst rawEmail = (body.email || '').toString().trim().toLowerCase();\nlet digits = (body.phone || '').toString().replace(/\\D/g, '');\nif (digits.startsWith('91') && digits.length === 12) digits = digits.slice(2);\nif (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);\nreturn { json: { name: body.name || '', email: rawEmail, phone: digits } };"
+      },
+      "id": "2",
+      "name": "Normalize Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [180, 260]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ \"http://localhost:5000/api/check_duplicate?email=\" + encodeURIComponent($json.email) + \"&phone=\" + encodeURIComponent($json.phone) }}",
+        "options": {}
+      },
+      "id": "3",
+      "name": "Check DB for Duplicate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 260]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [620, 260]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "alert_message",
+              "type": "string",
+              "value": "={{ \"Possible duplicate applicant: \" + $node[\"Normalize Fields\"].json.name + \" matches existing person_id \" + $json.person_id + \" (\" + $json.canonical_name + \") via \" + $json.matched_via }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5",
+      "name": "Build Alert Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [840, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webhook.site/REPLACE-WITH-YOUR-TEST-WEBHOOK-URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"alert\": $json.alert_message, \"submitted_name\": $node[\"Normalize Fields\"].json.name, \"submitted_email\": $node[\"Normalize Fields\"].json.email, \"submitted_phone\": $node[\"Normalize Fields\"].json.phone } }}",
+        "options": {}
+      },
+      "id": "6",
+      "name": "Send Duplicate Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1060, 160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"duplicate_flagged\", \"person_id\": $json.person_id } }}",
+        "options": {}
+      },
+      "id": "7",
+      "name": "Respond - Duplicate",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1280, 160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"no_duplicate_new_applicant_accepted\" } }}",
+        "options": {}
+      },
+      "id": "8",
+      "name": "Respond - No Duplicate",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [840, 360]
+    }
+  ],
+  "connections": {
+    "Webhook - New Applicant": {
+      "main": [[{ "node": "Normalize Fields", "type": "main", "index": 0 }]]
+    },
+    "Normalize Fields": {
+      "main": [[{ "node": "Check DB for Duplicate", "type": "main", "index": 0 }]]
+    },
+    "Check DB for Duplicate": {
+      "main": [[{ "node": "Is Duplicate?", "type": "main", "index": 0 }]]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [{ "node": "Build Alert Message", "type": "main", "index": 0 }],
+        [{ "node": "Respond - No Duplicate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Alert Message": {
+      "main": [[{ "node": "Send Duplicate Alert", "type": "main", "index": 0 }]]
+    },
+    "Send Duplicate Alert": {
+      "main": [[{ "node": "Respond - Duplicate", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "description": "Task 2 automation. POST {name, email, phone} to the webhook URL n8n gives you for this workflow. It normalizes the fields the same way scripts/ingest.py does, asks the Flask app's /api/check_duplicate endpoint whether that person already exists, and if so POSTs an alert to a webhook.site URL (swap in your own test URL, or swap the 'Send Duplicate Alert' node for a Slack/Email node - same idea). Requires app/app.py running on localhost:5000 (or update the URL in 'Check DB for Duplicate' to wherever it's deployed)."
+  }
+}

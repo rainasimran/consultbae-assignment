@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ConsultBae — Audio Submission</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 1.3rem; }
+  label { display: block; margin-top: 14px; font-weight: 600; font-size: 0.9rem; }
+  input[type=text], input[type=tel] { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+  button { margin-top: 10px; padding: 8px 14px; cursor: pointer; }
+  #recBtn.recording { background: #d33; color: white; }
+  .error { color: #b00; margin-top: 10px; }
+  .rowbtns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  audio { display: block; margin-top: 10px; width: 100%; }
+  a.nav { display: inline-block; margin-top: 20px; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+  <h1>Submit a voice sample</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <form id="form" method="POST" action="/submit" enctype="multipart/form-data">
+    <label>Full name</label>
+    <input type="text" name="name" required>
+
+    <label>Phone number</label>
+    <input type="tel" name="phone" required placeholder="e.g. 9000000123">
+
+    <label>Audio</label>
+    <div class="rowbtns">
+      <button type="button" id="recBtn">Start recording</button>
+      <span id="timer"></span>
+    </div>
+    <audio id="preview" controls style="display:none;"></audio>
+
+    <label>...or upload a file instead</label>
+    <input type="file" id="fileInput" accept="audio/*">
+
+    <input type="hidden" name="using_upload" id="using_upload" value="0">
+    <button type="submit" style="margin-top:16px;">Submit</button>
+  </form>
+
+  <a class="nav" href="/submissions">View all submissions →</a>
+
+<script>
+let mediaRecorder, chunks = [], recordedBlob = null, startTime;
+const recBtn = document.getElementById('recBtn');
+const preview = document.getElementById('preview');
+const timerEl = document.getElementById('timer');
+const fileInput = document.getElementById('fileInput');
+let timerInterval;
+
+recBtn.addEventListener('click', async () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      recordedBlob = new Blob(chunks, { type: 'audio/webm' });
+      preview.src = URL.createObjectURL(recordedBlob);
+      preview.style.display = 'block';
+      recBtn.textContent = 'Start recording';
+      recBtn.classList.remove('recording');
+      clearInterval(timerInterval);
+      stream.getTracks().forEach(t => t.stop());
+    };
+    mediaRecorder.start();
+    startTime = Date.now();
+    recBtn.textContent = 'Stop recording';
+    recBtn.classList.add('recording');
+    timerInterval = setInterval(() => {
+      timerEl.textContent = ((Date.now() - startTime) / 1000).toFixed(1) + 's';
+    }, 100);
+  } catch (err) {
+    alert('Microphone access failed: ' + err.message + '\nUse the file upload option instead.');
+  }
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) {
+    recordedBlob = null;
+    preview.src = URL.createObjectURL(fileInput.files[0]);
+    preview.style.display = 'block';
+  }
+});
+
+document.getElementById('form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  formData.delete('audio');
+  if (fileInput.files.length) {
+    formData.append('audio', fileInput.files[0]);
+  } else if (recordedBlob) {
+    formData.append('audio', recordedBlob, 'recording.webm');
+  } else {
+    alert('Please record audio or choose a file first.');
+    return;
+  }
+  fetch('/submit', { method: 'POST', body: formData })
+    .then(res => { window.location.href = '/submissions'; });
+});
+</script>
+</body>
+</html>
