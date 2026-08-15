@@ -66,20 +66,29 @@ cd app && python3 app.py
 **1. Confusing the outer `consultbae-assignment` folder with the inner `consultbae` folder.**
 When I opened a new terminal, commands like `cd app` or `.venv\Scripts\activate` kept failing
 with "path does not exist" or "module could not be loaded". I ran `pwd` and `dir` to check
-where I actually was, and realized [describe: you were one folder up / down from where you
-thought]. Once I `cd`'d into the right folder, it worked.
-What I searched: [what did you actually search, if anything?]
+where I actually was, and realized I was still in the outer `consultbae-assignment` folder
+instead of the `consultbae` folder. I then ran `cd consultbae` first, and after that, `cd app`
+worked correctly.
+
+What I searched: I didn't search anything. I just ran `pwd` and `dir` to check where I was.
 
 **2. Flask saying "No module named 'flask'" even though I'd already installed it.**
-This happened because every time I opened a *new* terminal tab, the `.venv` virtual
-environment wasn't automatically turned on in that new tab — it only stays active in the
-tab where I ran `.venv\Scripts\activate`. I kept forgetting to reactivate it before running
-`python app.py` in a fresh tab.
-What fixed it: running `.venv\Scripts\activate` again in the new tab before trying to run
-anything Python-related.
+When I tried to run `python app.py`, I got `ModuleNotFoundError: No module named 'flask'`.
+At first, I thought Flask might not have been installed correctly, but then I noticed that
+the `(.venv)` part was missing from my PowerShell prompt. I realized I was using a new
+terminal where the virtual environment wasn't active, even though Flask was installed in
+the `.venv` I had used earlier. I activated the environment again with
+`.\.venv\Scripts\Activate.ps1`, and then the Flask app ran normally.
 
-**3. `curl` failing with a weird "Cannot bind parameter 'Headers'" error.**
-On Windows, typing `curl` in PowerShell doesn't run the real curl tool — it secretly runs
-PowerShell's own `Invoke-WebRequest`, which doesn't understand `-H` and `-d` the same way.
-What fixed it: switching to `Invoke-RestMethod` with PowerShell's own syntax instead of
-trying to force curl-style commands to work.
+What I searched: I checked the terminal error and the active virtual environment rather
+than doing a separate web search.
+
+**3. `curl` failing with a "Cannot bind parameter 'Headers'" error.**
+I was trying to test the API with the curl command from the README, but PowerShell returned
+a `Cannot bind parameter 'Headers'` error. At first, I thought there might be something
+wrong with the request or the JSON I was sending. I then realized that in PowerShell,
+`curl` was being interpreted differently from the curl command shown in the README. I
+switched to `Invoke-RestMethod` using PowerShell syntax, and the API request worked.
+
+What I searched: I didn't do a separate web search. I worked from the error I was seeing
+and changed the command to the PowerShell version.
