@@ -127,7 +127,7 @@ def submissions():
     return render_template("submissions.html", rows=rows)
 
 
-@app.route("/api/check_duplicate")
+@app.route("/api/check_duplicate", methods=["GET", "POST"])
 def api_check_duplicate():
     """Task 2 support endpoint: used by the n8n workflow (automation/n8n_duplicate_alert.json).
     Given an email and/or phone (raw, unnormalized - same messiness as the
